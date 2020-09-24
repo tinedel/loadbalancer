@@ -4,7 +4,7 @@ import ua.kiev.tinedel.loadbalancer.provider.Provider
 
 val MAX_PROVIDERS = 10
 
-class LoadBalancer(providers: List<Provider>) {
+class LoadBalancer(providers: List<Provider>, private val balancingStrategy: BalancingStrategy) {
     private val providers: List<Provider>
 
     init {
@@ -16,12 +16,11 @@ class LoadBalancer(providers: List<Provider>) {
         this.providers = providers
     }
 
-    fun get() {
-        if (providers.size == 0) {
+    fun get(): String {
+        if (providers.isEmpty()) {
             throw BalancerException("No providers registered")
         }
 
-        // step 2 - we care only about initializing list of providers so delegate to first provider
-        providers[0].get()
+        return balancingStrategy.pickOne(providers).get()
     }
 }

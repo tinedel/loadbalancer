@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test
 internal class IdentityProviderTest {
 
     @Test
-    fun identityProvider_returnsStoredIdentity() {
+    fun `when getting value from identity provider the id is returned`() {
         val provider = IdentityProvider("someIdentity")
 
         assertEquals("someIdentity", provider.get())
