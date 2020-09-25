@@ -1,5 +1,6 @@
 plugins {
     id 'org.jetbrains.kotlin.jvm' version '1.4.10'
+    id 'org.jetbrains.dokka' version '1.4.10'
 }
 
 group 'org.example'
@@ -7,6 +8,13 @@ version '1.0-SNAPSHOT'
 
 repositories {
     mavenCentral()
+    jcenter()
+    maven {
+        url "https://dl.bintray.com/kotlin/kotlin-eap"
+    }
+    maven {
+        url "https://maven.pkg.jetbrains.space/kotlin/p/dokka/dev"
+    }
 }
 
 dependencies {

@@ -9,6 +9,21 @@ import kotlin.concurrent.write
 
 const val MAX_PROVIDERS = 10
 
+/**
+ * Load balancer over list of *providers*
+ *
+ * This class delegates [get] call to a [Provider.get] selected by provided [BalancingStrategy]
+ * In case if there are limits on amount of simultaneous requests underlying providers can handle
+ * [RequestThrottler] can be used to not overload [Provider]s even more.
+ *
+ * Load balancer monitors health of the providers by calling [Provider.check] method, disabling provider until
+ * 2 consequent calls to check are successful
+ *
+ * @property providers initial list of providers to which calls could be dispatched
+ * @property balancingStrategy strategy used to balance requests
+ * @property requestThrottler throttler which allows to limit amount of simultaneous requests in flight
+ * @property heartBeatTime how often to call [Provider.check]
+ */
 class LoadBalancer(
     providers: List<Provider>,
     private val balancingStrategy: BalancingStrategy,
@@ -56,6 +71,11 @@ class LoadBalancer(
         }
     }
 
+    /**
+     * Async interface exposed to clients to facilitate asynchronous use of this component
+     * [get()] is executed on dedicated providers context
+     * WARNING: can be canceled [supervisorScope] is advised
+     */
     fun getAsync(scope: CoroutineScope): Deferred<String> {
 
         return scope.async(providersContext) {
@@ -63,6 +83,11 @@ class LoadBalancer(
         }
     }
 
+    /**
+     * Calls underlying [providers] get according to [balancingStrategy] with requests limited by [requestThrottler]
+     * If all providers are disabled or providers list is empty exception is thrown
+     * If there are more requests at the same time then allowed by [requestThrottler] exception is thrown
+     */
     fun get() = lock.read {
         val enabledProviders = providers.filterValues { it.enabled }.keys.toList()
         if (enabledProviders.isEmpty()) {
@@ -74,10 +99,20 @@ class LoadBalancer(
         }
     }
 
+    /**
+     * Excludes provider from the balancer.
+     *
+     * @param provider to be excluded. If not present nothing happens
+     */
     fun exclude(provider: Provider) = lock.write {
         providers.remove(provider)
     }
 
+    /**
+     * Includes new provider to the balancer
+     *
+     * @param provider to include. If there is already a provider which is equal to the one supplied nothing happens
+     */
     fun include(provider: Provider) = lock.read {
         if (providers.size >= MAX_PROVIDERS) {
             throw BalancerException("Too many providers. Limit the number of providers to $MAX_PROVIDERS")

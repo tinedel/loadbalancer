@@ -1,2 +1,15 @@
-rootProject.name = 'loadbalancer'
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        jcenter()
+        mavenCentral()
+        maven {
+            url "https://dl.bintray.com/kotlin/kotlin-eap"
+        }
+        maven {
+            url "https://maven.pkg.jetbrains.space/kotlin/p/dokka/dev"
+        }
+    }
+}
 
+rootProject.name = 'loadbalancer'
