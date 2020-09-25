@@ -4,6 +4,6 @@ interface Provider {
     fun get(): String
 }
 
-class IdentityProvider(private val id: String) : Provider {
+open class IdentityProvider(private val id: String) : Provider {
     override fun get() = id
 }

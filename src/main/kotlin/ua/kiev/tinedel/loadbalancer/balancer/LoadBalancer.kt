@@ -1,11 +1,15 @@
 package ua.kiev.tinedel.loadbalancer.balancer
 
+import kotlinx.coroutines.*
 import ua.kiev.tinedel.loadbalancer.provider.Provider
+import java.util.concurrent.Executors
 
-val MAX_PROVIDERS = 10
+const val MAX_PROVIDERS = 10
 
 class LoadBalancer(providers: List<Provider>, private val balancingStrategy: BalancingStrategy) {
     private val providers: List<Provider>
+
+    private val providersContext = Executors.newFixedThreadPool(MAX_PROVIDERS).asCoroutineDispatcher()
 
     init {
         if (providers.size >= MAX_PROVIDERS) {
@@ -16,11 +20,17 @@ class LoadBalancer(providers: List<Provider>, private val balancingStrategy: Bal
         this.providers = providers
     }
 
-    fun get(): String {
+    fun getAsync(scope: CoroutineScope): Deferred<String> {
         if (providers.isEmpty()) {
             throw BalancerException("No providers registered")
         }
 
-        return balancingStrategy.pickOne(providers).get()
+        return scope.async(providersContext) {
+            balancingStrategy.pickOne(providers).get()
+        }
+    }
+
+    fun get() = runBlocking {
+        getAsync(this).await()
     }
 }
