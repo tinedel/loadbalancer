@@ -189,7 +189,7 @@ internal class RoundRobinStrategyIT {
                 assertThrows<BalancerException> { loadBalancer.get() }
                 allFaulty[0].restore()
 
-                delay(550)
+                delay(650)
 
                 // it's indeed disabled
                 assertEquals("1", loadBalancer.get())
