@@ -26,7 +26,7 @@ class LoadBalancer(
     private val heartBeatScope = CoroutineScope(providersContext)
 
     init {
-        if (providers.size >= MAX_PROVIDERS) {
+        if (providers.size > MAX_PROVIDERS) {
             throw BalancerException("Too many providers. Limit the number of providers to $MAX_PROVIDERS")
         }
 
@@ -78,8 +78,14 @@ class LoadBalancer(
         providers.remove(provider)
     }
 
-    fun include(provider: Provider) = lock.write {
-        providers.put(provider, ProviderState())
+    fun include(provider: Provider) = lock.read {
+        if (providers.size >= MAX_PROVIDERS) {
+            throw BalancerException("Too many providers. Limit the number of providers to $MAX_PROVIDERS")
+        } else {
+            lock.write {
+                providers.put(provider, ProviderState())
+            }
+        }
     }
 
     override fun close() {

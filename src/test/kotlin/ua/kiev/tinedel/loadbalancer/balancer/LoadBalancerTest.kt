@@ -10,7 +10,7 @@ import ua.kiev.tinedel.loadbalancer.provider.Provider
 
 internal class LoadBalancerTest {
 
-    lateinit var balancingStrategy: BalancingStrategy
+    private lateinit var balancingStrategy: BalancingStrategy
 
     @BeforeEach
     fun initMocks() {
@@ -19,7 +19,7 @@ internal class LoadBalancerTest {
 
     @Test
     fun `when registering list of providers less or equal to 10 load balancer is created`() {
-        assertDoesNotThrow { LoadBalancer(listOf(IdentityProvider("1")), balancingStrategy).use { } }
+        assertDoesNotThrow { LoadBalancer(listOf(IdentityProvider("1")), balancingStrategy).close() }
     }
 
     private val excessiveList = (1..11).map { IdentityProvider(it.toString()) }.toList()
@@ -31,7 +31,22 @@ internal class LoadBalancerTest {
             LoadBalancer(
                 excessiveList,
                 balancingStrategy
-            ).use { }
+            ).close()
+        }
+    }
+
+    @Test
+    fun `when adding more than 10 providers exception is thrown`() {
+        val providers = excessiveList.dropLast(1)
+        val loadBalancer = LoadBalancer(
+            providers,
+            balancingStrategy
+        )
+
+        loadBalancer.close()
+
+        assertThrows<BalancerException> {
+            loadBalancer.include(IdentityProvider("extra"))
         }
     }
 
