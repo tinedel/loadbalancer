@@ -125,11 +125,11 @@ internal class RoundRobinStrategyIT {
     }
 
     @Test
-    fun `faulty provider is removed after heartbeat time`() {
+    fun `faulty provider is disabled after heartbeat time`() {
         val loadBalancer = LoadBalancer(
             listOf(IdentityProvider("1")),
             RoundRobinBalancingStrategy(),
-            500 // to reduce testing time
+            250 // to reduce testing time
         )
 
         loadBalancer.use {
@@ -138,9 +138,60 @@ internal class RoundRobinStrategyIT {
                 loadBalancer.include(FaultyProvider("faulty"))
                 assertEquals("1", loadBalancer.get())
                 assertEquals("faulty", loadBalancer.get())
-                delay(700)
+                delay(260)
 
                 assertEquals("1", loadBalancer.get())
+                assertEquals("1", loadBalancer.get())
+            }
+        }
+    }
+
+    @Test
+    fun `faulty provider is reenabled after heartbeat time`() {
+        val loadBalancer = LoadBalancer(
+            listOf(IdentityProvider("1")),
+            RoundRobinBalancingStrategy(),
+            250 // to reduce testing time
+        )
+
+        loadBalancer.use {
+            runBlocking {
+                delay(10) // let the heartBeat kick in
+                val faultyProvider = FaultyProvider("faulty")
+                loadBalancer.include(faultyProvider)
+                assertEquals("1", loadBalancer.get())
+                assertEquals("faulty", loadBalancer.get())
+                delay(260)
+
+                // it's indeed disabled
+                assertEquals("1", loadBalancer.get())
+                assertEquals("1", loadBalancer.get())
+
+                faultyProvider.restore()
+                delay(700)
+
+                assertTrue(listOf(loadBalancer.get(), loadBalancer.get()).contains("faulty"))
+            }
+        }
+    }
+
+    @Test
+    fun `when all providers fail exception is thrown on get and not thrown on reenabled`() {
+        val allFaulty = listOf(FaultyProvider("1"), FaultyProvider("2"))
+        val loadBalancer = LoadBalancer(
+            allFaulty,
+            RoundRobinBalancingStrategy(),
+            250 // to reduce testing time
+        )
+
+        loadBalancer.use {
+            runBlocking {
+                assertThrows<BalancerException> { loadBalancer.get() }
+                allFaulty[0].restore()
+
+                delay(550)
+
+                // it's indeed disabled
                 assertEquals("1", loadBalancer.get())
             }
         }

@@ -9,5 +9,15 @@ class DelayedIdentityProvider(id: String, private val millis: Long) : IdentityPr
 }
 
 class FaultyProvider(id: String) : IdentityProvider(id) {
-    override fun check() = false
+
+    private var failed = true
+    override fun check() = !failed
+
+    fun fail() {
+        failed = true
+    }
+
+    fun restore() {
+        failed = false
+    }
 }

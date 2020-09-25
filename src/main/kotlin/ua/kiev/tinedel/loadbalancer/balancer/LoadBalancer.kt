@@ -15,7 +15,9 @@ class LoadBalancer(
     private val heartBeatTime: Long = 30_000
 ) : AutoCloseable {
 
-    private val providers: MutableList<Provider>
+    data class ProviderState(val enabled: Boolean = true, val successCount: Int = 0)
+
+    private val providers: MutableMap<Provider, ProviderState>
 
     private val lock = ReentrantReadWriteLock()
     private val providersContext = Executors.newFixedThreadPool(MAX_PROVIDERS).asCoroutineDispatcher()
@@ -27,7 +29,7 @@ class LoadBalancer(
             throw BalancerException("Too many providers. Limit the number of providers to $MAX_PROVIDERS")
         }
 
-        this.providers = providers.toMutableList()
+        this.providers = providers.map { it to ProviderState() }.toMap().toMutableMap()
 
         heartBeatScope.launch {
             while (isActive) {
@@ -39,7 +41,18 @@ class LoadBalancer(
     }
 
     private fun checkProviders() = lock.write {
-        providers.removeIf { !it.check() }
+        providers.keys.forEach {
+            providers.computeIfPresent(it) { p, state ->
+
+                when {
+                    !p.check() -> ProviderState(false, 0)
+                    !state.enabled && state.successCount >= 1 -> ProviderState(true, 0)
+                    else -> {
+                        state.copy(successCount = state.successCount + 1)
+                    }
+                }
+            }
+        }
     }
 
     fun getAsync(scope: CoroutineScope): Deferred<String> {
@@ -50,11 +63,12 @@ class LoadBalancer(
     }
 
     fun get() = lock.read {
-        if (providers.isEmpty()) {
+        val enabledProviders = providers.filterValues { it.enabled }.keys.toList()
+        if (enabledProviders.isEmpty()) {
             throw BalancerException("No providers registered")
         }
 
-        balancingStrategy.pickOne(providers.toList()).get()
+        balancingStrategy.pickOne(enabledProviders).get()
     }
 
     fun exclude(provider: Provider) = lock.write {
@@ -62,7 +76,7 @@ class LoadBalancer(
     }
 
     fun include(provider: Provider) = lock.write {
-        providers.add(provider)
+        providers.put(provider, ProviderState())
     }
 
     override fun close() {
