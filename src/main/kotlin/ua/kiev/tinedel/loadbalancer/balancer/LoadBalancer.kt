@@ -12,6 +12,7 @@ const val MAX_PROVIDERS = 10
 class LoadBalancer(
     providers: List<Provider>,
     private val balancingStrategy: BalancingStrategy,
+    private val requestThrottler: RequestThrottler = NoThrottling(),
     private val heartBeatTime: Long = 30_000
 ) : AutoCloseable {
 
@@ -68,7 +69,9 @@ class LoadBalancer(
             throw BalancerException("No providers registered")
         }
 
-        balancingStrategy.pickOne(enabledProviders).get()
+        requestThrottler.throttle(enabledProviders) {
+            balancingStrategy.pickOne(it).get()
+        }
     }
 
     fun exclude(provider: Provider) = lock.write {

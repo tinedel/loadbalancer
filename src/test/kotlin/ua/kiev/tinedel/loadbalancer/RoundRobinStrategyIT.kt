@@ -129,7 +129,7 @@ internal class RoundRobinStrategyIT {
         val loadBalancer = LoadBalancer(
             listOf(IdentityProvider("1")),
             RoundRobinBalancingStrategy(),
-            250 // to reduce testing time
+            heartBeatTime = 250 // to reduce testing time
         )
 
         loadBalancer.use {
@@ -151,7 +151,7 @@ internal class RoundRobinStrategyIT {
         val loadBalancer = LoadBalancer(
             listOf(IdentityProvider("1")),
             RoundRobinBalancingStrategy(),
-            250 // to reduce testing time
+            heartBeatTime = 250 // to reduce testing time
         )
 
         loadBalancer.use {
@@ -181,7 +181,7 @@ internal class RoundRobinStrategyIT {
         val loadBalancer = LoadBalancer(
             allFaulty,
             RoundRobinBalancingStrategy(),
-            250 // to reduce testing time
+            heartBeatTime = 250 // to reduce testing time
         )
 
         loadBalancer.use {
