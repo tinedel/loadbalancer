@@ -186,6 +186,7 @@ internal class RoundRobinStrategyIT {
 
         loadBalancer.use {
             runBlocking {
+                delay(10)
                 assertThrows<BalancerException> { loadBalancer.get() }
                 allFaulty[0].restore()
 
