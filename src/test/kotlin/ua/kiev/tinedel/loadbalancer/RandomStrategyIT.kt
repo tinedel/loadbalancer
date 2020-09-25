@@ -19,8 +19,10 @@ internal class RandomStrategyIT {
             RandomBalancingStrategy()
         )
 
-        (1..10).map { loadBalancer.get() }.distinct().forEach {
-            assertTrue(listOf("1", "2", "3").contains(it))
+        loadBalancer.use {
+            (1..10).map { loadBalancer.get() }.distinct().forEach {
+                assertTrue(listOf("1", "2", "3").contains(it))
+            }
         }
     }
 }

@@ -2,6 +2,7 @@ package ua.kiev.tinedel.loadbalancer
 
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -11,6 +12,7 @@ import ua.kiev.tinedel.loadbalancer.balancer.BalancerException
 import ua.kiev.tinedel.loadbalancer.balancer.LoadBalancer
 import ua.kiev.tinedel.loadbalancer.balancer.RoundRobinBalancingStrategy
 import ua.kiev.tinedel.loadbalancer.provider.DelayedIdentityProvider
+import ua.kiev.tinedel.loadbalancer.provider.FaultyProvider
 import ua.kiev.tinedel.loadbalancer.provider.IdentityProvider
 import kotlin.system.measureTimeMillis
 
@@ -29,7 +31,9 @@ internal class RoundRobinStrategyIT {
             RoundRobinBalancingStrategy()
         )
 
-        assertEquals(listOf("1", "2", "3", "1"), (1..4).map { loadBalancer.get() }.toList())
+        loadBalancer.use {
+            assertEquals(listOf("1", "2", "3", "1"), (1..4).map { loadBalancer.get() }.toList())
+        }
     }
 
     @Test
@@ -43,24 +47,26 @@ internal class RoundRobinStrategyIT {
             RoundRobinBalancingStrategy()
         )
 
-        val runningTime = measureTimeMillis {
-            val res = runBlocking {
-                coroutineScope {
-                    val p1 = loadBalancer.getAsync(this)
-                    val p2 = loadBalancer.getAsync(this)
-                    val p3 = loadBalancer.getAsync(this)
+        loadBalancer.use {
+            val runningTime = measureTimeMillis {
+                val res = runBlocking {
+                    coroutineScope {
+                        val p1 = loadBalancer.getAsync(this)
+                        val p2 = loadBalancer.getAsync(this)
+                        val p3 = loadBalancer.getAsync(this)
 
-                    listOf(p1, p2, p3).awaitAll()
+                        listOf(p1, p2, p3).awaitAll()
+                    }
                 }
+
+                assertEquals(3, res.size)
+                assertTrue(res.contains("1"))
+                assertTrue(res.contains("2"))
+                assertTrue(res.contains("3"))
             }
 
-            assertEquals(3, res.size)
-            assertTrue(res.contains("1"))
-            assertTrue(res.contains("2"))
-            assertTrue(res.contains("3"))
+            assertTrue(runningTime < 2000)
         }
-
-        assertTrue(runningTime < 2000)
     }
 
     @Test
@@ -70,14 +76,16 @@ internal class RoundRobinStrategyIT {
             RoundRobinBalancingStrategy()
         )
 
-        val res = mutableListOf(loadBalancer.get(), loadBalancer.get())
+        loadBalancer.use {
+            val res = mutableListOf(loadBalancer.get(), loadBalancer.get())
 
-        loadBalancer.include(IdentityProvider("4"))
+            loadBalancer.include(IdentityProvider("4"))
 
-        res.add(loadBalancer.get())
-        res.add(loadBalancer.get())
+            res.add(loadBalancer.get())
+            res.add(loadBalancer.get())
 
-        assertEquals(listOf("1", "2", "3", "4"), res)
+            assertEquals(listOf("1", "2", "3", "4"), res)
+        }
     }
 
     @Test
@@ -88,16 +96,19 @@ internal class RoundRobinStrategyIT {
             RoundRobinBalancingStrategy()
         )
 
-        val res = mutableListOf(loadBalancer.get(), loadBalancer.get())
+        loadBalancer.use {
 
-        loadBalancer.exclude(p2)
+            val res = mutableListOf(loadBalancer.get(), loadBalancer.get())
 
-        res.add(loadBalancer.get())
-        res.add(loadBalancer.get())
-        res.add(loadBalancer.get())
+            loadBalancer.exclude(p2)
 
-        // as round robin implementation is not stable regarding providers' list changes the pattern is a bit weird
-        assertEquals(listOf("1", "2", "1", "3", "1"), res)
+            res.add(loadBalancer.get())
+            res.add(loadBalancer.get())
+            res.add(loadBalancer.get())
+
+            // as round robin implementation is not stable regarding providers' list changes the pattern is a bit weird
+            assertEquals(listOf("1", "2", "1", "3", "1"), res)
+        }
     }
 
     @Test
@@ -107,8 +118,31 @@ internal class RoundRobinStrategyIT {
             RoundRobinBalancingStrategy()
         )
 
-        providersList.forEach { loadBalancer.exclude(it) }
+        loadBalancer.use {
+            providersList.forEach { loadBalancer.exclude(it) }
+            assertThrows<BalancerException> { loadBalancer.get() }
+        }
+    }
 
-        assertThrows<BalancerException> { loadBalancer.get() }
+    @Test
+    fun `faulty provider is removed after heartbeat time`() {
+        val loadBalancer = LoadBalancer(
+            listOf(IdentityProvider("1")),
+            RoundRobinBalancingStrategy(),
+            500 // to reduce testing time
+        )
+
+        loadBalancer.use {
+            runBlocking {
+                delay(10) // let the heartBeat kick in
+                loadBalancer.include(FaultyProvider("faulty"))
+                assertEquals("1", loadBalancer.get())
+                assertEquals("faulty", loadBalancer.get())
+                delay(700)
+
+                assertEquals("1", loadBalancer.get())
+                assertEquals("1", loadBalancer.get())
+            }
+        }
     }
 }

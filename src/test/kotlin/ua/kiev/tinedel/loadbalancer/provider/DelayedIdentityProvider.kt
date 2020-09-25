@@ -7,3 +7,7 @@ class DelayedIdentityProvider(id: String, private val millis: Long) : IdentityPr
         return super.get()
     }
 }
+
+class FaultyProvider(id: String) : IdentityProvider(id) {
+    override fun check() = false
+}

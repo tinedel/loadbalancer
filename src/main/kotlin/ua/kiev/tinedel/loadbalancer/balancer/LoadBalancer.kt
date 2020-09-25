@@ -1,9 +1,6 @@
 package ua.kiev.tinedel.loadbalancer.balancer
 
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.async
+import kotlinx.coroutines.*
 import ua.kiev.tinedel.loadbalancer.provider.Provider
 import java.util.concurrent.Executors
 import java.util.concurrent.locks.ReentrantReadWriteLock
@@ -12,11 +9,18 @@ import kotlin.concurrent.write
 
 const val MAX_PROVIDERS = 10
 
-class LoadBalancer(providers: List<Provider>, private val balancingStrategy: BalancingStrategy) {
+class LoadBalancer(
+    providers: List<Provider>,
+    private val balancingStrategy: BalancingStrategy,
+    private val heartBeatTime: Long = 30_000
+) : AutoCloseable {
+
     private val providers: MutableList<Provider>
 
     private val lock = ReentrantReadWriteLock()
     private val providersContext = Executors.newFixedThreadPool(MAX_PROVIDERS).asCoroutineDispatcher()
+
+    private val heartBeatScope = CoroutineScope(providersContext)
 
     init {
         if (providers.size >= MAX_PROVIDERS) {
@@ -24,6 +28,18 @@ class LoadBalancer(providers: List<Provider>, private val balancingStrategy: Bal
         }
 
         this.providers = providers.toMutableList()
+
+        heartBeatScope.launch {
+            while (isActive) {
+                checkProviders()
+                delay(heartBeatTime)
+            }
+        }
+
+    }
+
+    private fun checkProviders() = lock.write {
+        providers.removeIf { !it.check() }
     }
 
     fun getAsync(scope: CoroutineScope): Deferred<String> {
@@ -47,6 +63,10 @@ class LoadBalancer(providers: List<Provider>, private val balancingStrategy: Bal
 
     fun include(provider: Provider) = lock.write {
         providers.add(provider)
+    }
+
+    override fun close() {
+        heartBeatScope.cancel()
     }
 }
 

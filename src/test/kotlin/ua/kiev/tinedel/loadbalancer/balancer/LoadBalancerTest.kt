@@ -19,7 +19,7 @@ internal class LoadBalancerTest {
 
     @Test
     fun `when registering list of providers less or equal to 10 load balancer is created`() {
-        assertDoesNotThrow { LoadBalancer(listOf(IdentityProvider("1")), balancingStrategy) }
+        assertDoesNotThrow { LoadBalancer(listOf(IdentityProvider("1")), balancingStrategy).use { } }
     }
 
     private val excessiveList = (1..11).map { IdentityProvider(it.toString()) }.toList()
@@ -31,7 +31,7 @@ internal class LoadBalancerTest {
             LoadBalancer(
                 excessiveList,
                 balancingStrategy
-            )
+            ).use { }
         }
     }
 
@@ -41,7 +41,9 @@ internal class LoadBalancerTest {
 
         val loadBalancer = LoadBalancer(fiveProvidersList, balancingStrategy)
 
-        assertEquals(loadBalancer.get(), "3")
+        loadBalancer.use {
+            assertEquals(loadBalancer.get(), "3")
+        }
 
         verify(balancingStrategy).pickOne(fiveProvidersList)
         verifyNoMoreInteractions(balancingStrategy)
@@ -51,7 +53,9 @@ internal class LoadBalancerTest {
     fun `when load balancing empty providers list exception must be thrown`() {
         val loadBalancer = LoadBalancer(listOf(), balancingStrategy)
 
-        assertThrows<BalancerException> { loadBalancer.get() }
+        loadBalancer.use {
+            assertThrows<BalancerException> { loadBalancer.get() }
+        }
 
         verifyZeroInteractions(balancingStrategy)
     }
@@ -61,8 +65,11 @@ internal class LoadBalancerTest {
         whenever(balancingStrategy.pickOne(any())).thenReturn(fiveProvidersList[2])
 
         val loadBalancer = LoadBalancer(fiveProvidersList, balancingStrategy)
-        loadBalancer.exclude(fiveProvidersList[1])
-        loadBalancer.get()
+
+        loadBalancer.use {
+            loadBalancer.exclude(fiveProvidersList[1])
+            loadBalancer.get()
+        }
 
         val providersListCapture = argumentCaptor<List<Provider>>()
 
@@ -80,8 +87,11 @@ internal class LoadBalancerTest {
 
         val loadBalancer = LoadBalancer(fiveProvidersList, balancingStrategy)
         val provider = IdentityProvider("6")
-        loadBalancer.include(provider)
-        loadBalancer.get()
+
+        loadBalancer.use {
+            loadBalancer.include(provider)
+            loadBalancer.get()
+        }
 
         val providersListCapture = argumentCaptor<List<Provider>>()
 
