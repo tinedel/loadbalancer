@@ -1,12 +1,12 @@
 package ua.kiev.tinedel.loadbalancer.balancer
 
 import com.nhaarman.mockitokotlin2.*
-import org.junit.jupiter.api.Assertions.assertDoesNotThrow
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import ua.kiev.tinedel.loadbalancer.provider.IdentityProvider
+import ua.kiev.tinedel.loadbalancer.provider.Provider
 
 internal class LoadBalancerTest {
 
@@ -54,5 +54,42 @@ internal class LoadBalancerTest {
         assertThrows<BalancerException> { loadBalancer.get() }
 
         verifyZeroInteractions(balancingStrategy)
+    }
+
+    @Test
+    fun `when excluding provider it should not be presented to balancing strategy`() {
+        whenever(balancingStrategy.pickOne(any())).thenReturn(fiveProvidersList[2])
+
+        val loadBalancer = LoadBalancer(fiveProvidersList, balancingStrategy)
+        loadBalancer.exclude(fiveProvidersList[1])
+        loadBalancer.get()
+
+        val providersListCapture = argumentCaptor<List<Provider>>()
+
+        verify(balancingStrategy).pickOne(providersListCapture.capture())
+        verifyNoMoreInteractions(balancingStrategy)
+
+        val actualProvidersList = providersListCapture.firstValue
+        assertEquals(4, actualProvidersList.size)
+        assertFalse(actualProvidersList.contains(fiveProvidersList[1]))
+    }
+
+    @Test
+    fun `when added provider it should be presented to balancing strategy`() {
+        whenever(balancingStrategy.pickOne(any())).thenReturn(fiveProvidersList[2])
+
+        val loadBalancer = LoadBalancer(fiveProvidersList, balancingStrategy)
+        val provider = IdentityProvider("6")
+        loadBalancer.include(provider)
+        loadBalancer.get()
+
+        val providersListCapture = argumentCaptor<List<Provider>>()
+
+        verify(balancingStrategy).pickOne(providersListCapture.capture())
+        verifyNoMoreInteractions(balancingStrategy)
+
+        val actualProvidersList = providersListCapture.firstValue
+        assertEquals(6, actualProvidersList.size)
+        assertTrue(actualProvidersList.contains(provider))
     }
 }

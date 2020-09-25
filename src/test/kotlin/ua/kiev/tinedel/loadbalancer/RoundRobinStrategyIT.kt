@@ -6,6 +6,8 @@ import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import ua.kiev.tinedel.loadbalancer.balancer.BalancerException
 import ua.kiev.tinedel.loadbalancer.balancer.LoadBalancer
 import ua.kiev.tinedel.loadbalancer.balancer.RoundRobinBalancingStrategy
 import ua.kiev.tinedel.loadbalancer.provider.DelayedIdentityProvider
@@ -14,14 +16,16 @@ import kotlin.system.measureTimeMillis
 
 internal class RoundRobinStrategyIT {
 
+    private val providersList = listOf(
+        IdentityProvider("1"),
+        IdentityProvider("2"),
+        IdentityProvider("3")
+    )
+
     @Test
     fun `when using round robin strategy providers responds in turns`() {
         val loadBalancer = LoadBalancer(
-            listOf(
-                IdentityProvider("1"),
-                IdentityProvider("2"),
-                IdentityProvider("3")
-            ),
+            providersList,
             RoundRobinBalancingStrategy()
         )
 
@@ -29,7 +33,7 @@ internal class RoundRobinStrategyIT {
     }
 
     @Test
-    fun `concurrent execution allowed and round robin`() {
+    fun `concurrent execution allowed in round robin`() {
         val loadBalancer = LoadBalancer(
             listOf(
                 DelayedIdentityProvider("1", 1000L),
@@ -59,4 +63,52 @@ internal class RoundRobinStrategyIT {
         assertTrue(runningTime < 2000)
     }
 
+    @Test
+    fun `when provider is included after load balancer creation it is called`() {
+        val loadBalancer = LoadBalancer(
+            providersList,
+            RoundRobinBalancingStrategy()
+        )
+
+        val res = mutableListOf(loadBalancer.get(), loadBalancer.get())
+
+        loadBalancer.include(IdentityProvider("4"))
+
+        res.add(loadBalancer.get())
+        res.add(loadBalancer.get())
+
+        assertEquals(listOf("1", "2", "3", "4"), res)
+    }
+
+    @Test
+    fun `when provider is excluded after load balancer creation it is not called`() {
+        val p2 = providersList[1]
+        val loadBalancer = LoadBalancer(
+            providersList,
+            RoundRobinBalancingStrategy()
+        )
+
+        val res = mutableListOf(loadBalancer.get(), loadBalancer.get())
+
+        loadBalancer.exclude(p2)
+
+        res.add(loadBalancer.get())
+        res.add(loadBalancer.get())
+        res.add(loadBalancer.get())
+
+        // as round robin implementation is not stable regarding providers' list changes the pattern is a bit weird
+        assertEquals(listOf("1", "2", "1", "3", "1"), res)
+    }
+
+    @Test
+    fun `when all providers are excluded load balancer's get should fail`() {
+        val loadBalancer = LoadBalancer(
+            providersList,
+            RoundRobinBalancingStrategy()
+        )
+
+        providersList.forEach { loadBalancer.exclude(it) }
+
+        assertThrows<BalancerException> { loadBalancer.get() }
+    }
 }
